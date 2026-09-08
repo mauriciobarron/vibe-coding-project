@@ -11,18 +11,21 @@ _____
 ## Upgrade paths run (pick two)
 
 - [ ] Design Match
-- [ ] Add Interactivity
+- [x] Add Interactivity
 - [ ] Surgical Refinement
 - [ ] Existing Product Track
 
 ## v2 build
 
-- **v2 shareable link:** _____
-- **Before → after:** _____
-- **What each pass changed:** _____
+- **Shareable link:** https://lovable.dev/preview/wuioihXgEAUVE508utapodLH9Qp0Hs7s
+- **Before → after:** From a static pipeline overview → to an action-oriented CRM that helps sales reps prioritize, decide, and move opportunities forward.
+- **What each pass changed:**
+  - Add Interactivity: Actionable CTAs were added to each opportunity card—such as logging calls, scheduling follow-ups, updating stages, and creating tasks—while contextual alerts prioritize the next best action.
 
 ## Show & Swap read, round 2
 
 _A NEW partner, a blind read. What landed differently from v1?_
 
-_____
+- **Feels like a real product, or a mockup?** Yes, it feels like a real product. The filters work well, and the cards include CTAs and clear actions to take next.
+- **Where interactivity fell short:** There is a lot of information to process. It can feel slightly overwhelming at first because of the volume of data displayed.
+- **Would they show it to a VP?** Yes. It presents a credible solution because it combines pipeline visibility with practical actions for sales reps.

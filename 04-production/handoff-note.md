@@ -6,26 +6,45 @@
 
 _One paragraph an engineer can read in 60 seconds._
 
-_____
+This is a high-fidelity, clickable front-end prototype that tests one hypothesis: giving Physician Relations reps a purpose-built CRM instead of spreadsheets will increase physician contact logging, follow-up scheduling, and profile maintenance. It is a TanStack Start (React 19 + Vite 7) single-page app; all state still lives in one React context provider seeded from TypeScript demo modules, so a reload wipes contacts and schedule changes — persistence is deliberately not wired. There are six screens (Today, Schedule, Planned Route, My Physicians, Physician Profile, Evidence) wired into a strict flow: pick physicians on Today → schedule them → confirm a visit route → return to Today. A Lovable Cloud database now exists with representatives, physicians, contacts, and appointments tables, typed client code, and row-level security (public read, signed-in write), but no screen calls it yet. The kill-switch metric (weekly contact rate vs. the 20% threshold) is computed live and displayed on every anchor screen; logging one contact in the demo moves the signal across the threshold. If you can run bun install && bun run dev, you can evaluate the whole thing in ten minutes. Everything on screen is mocked and clearly labeled as sample data; the honest artifact for stakeholders is the flow, not the numbers.
 
 ## Architecture (plain language)
 
-- **Frontend:** _____
-- **Backend / data:** _____
-- **Key flows:** _____
+- **Frontend:** Framework: TanStack Start v1 (React 19, Vite 7, TypeScript). File-based routing under src/routes/ — TanStack Router is fixed; don't introduce another router. Routes are thin. Each file under src/routes/ only declares the route, head metadata, and renders a screen component. All behavior lives in src/features/<screen-name>/screens/: src/features/today/ — TodayScreen (anchor screen, physician selection queue) src/features/schedule/ — ScheduleScreen (calendar-style scheduling) src/features/planned-route/ — PlannedRouteScreen + PlannedRouteMap (stylized SVG route map) src/features/physicians/ — MyPhysiciansScreen (catalog) + PhysicianProfileScreen (CRM deep-dive workspace with 7-stage Kanban journey, timeline, and analytics charts via recharts) src/features/evidence/ — EvidenceScreen (analytics dashboard: adoption line chart, time-to-log bullet chart, activity-rate charts, profile completeness) src/features/app-shell/ — sidebar navigation shell, grouping Today/Schedule/Planned Route under "Engagement Planning" and the rest under a catalog group. Shared bits live in src/shared/ (avatars, loading skeletons, a useReady hook). Generic UI primitives are shadcn/radix in src/components/ui/. State and data src/features/crm/state/PrmProvider.tsx is the single source of truth for the UI: one React context holding physicians, schedule entries, contact history, weekly signal percentages, and all actions (logContact, updateField, snooze, schedule add/remove, route confirm). Every screen reads and mutates through this provider. src/features/crm/data/demo-data.ts — 12 seeded physicians (Spanish names, MXN billing figures), one representative, thresholds, and the evidence data. All numbers are illustrative sample data. src/features/engagement-planning/data/planning-data.ts — availability windows, hospital geography, and the route math (visit ordering by appointment time + proximity + travel time, outlier detection, overlap prevention with MIN_GAP_MINUTES). src/features/physicians/data/profile-analytics.ts and src/features/evidence/data/evidence-data.ts — per-physician KPI series and weekly evidence series. Every metric on screen carries a period label and a "sample data" designation; nothing is fetched.
+- **Backend / data:** Lovable Cloud (Supabase) project with one migration: supabase/migrations/20260921112654_*.sql. Tables — representatives, physicians (slug, specialty, hospital, relationship stage, referral figures, last-contact timestamps, geo coordinates, assigned representative), contacts (channel, note, outcome, next action, stage transitions with reasons), and appointments (visit type, status, start/end, route order, travel time, distance). Timestamps auto-update via triggers. Access rules: anyone can read all four tables; only signed-in users can change records. Row-level security is enabled everywhere. There are no user roles or scoping policies yet — any signed-in user can edit any row. Typed clients are generated under src/integrations/supabase/ (types.ts mirrors the schema; browser, server, and admin clients exist). Nothing imports them in app code yet — the integration is dormant plumbing awaiting the store redesign.
+- **Key flows:** Today → Schedule: Schedule is intentionally empty until at least one physician is selected on Today. Adding one shows a green confirmation, flips the card CTA to "Scheduled," and surfaces recommended availability times.
+Schedule → Planned Route: Only in-person visits map onto the route; the map orders stops by appointment time, hospital proximity, and travel time, flags outliers with "Keep in Route / Reschedule Visit" actions, and blocks physicians without valid locations.
+Route confirm → Today: Confirming the route shows a confirmation message and navigates back to Today, closing the loop.
+Evidence loop: Weekly contact and profile-update percentages are recomputed on every logContact/updateField call and compared against the 20% / 30% thresholds — the product's own kill switch is visible at all times.
 
 ## What's solid vs. what's duct tape
 
 | Area | State | Notes |
 |---|---|---|
-| _____ | solid / rough | _____ |
+| Architecture, flow & data model | solid | The app has a clean separation between data, domain logic, state management, and UI. The Today → Schedule → Planned Route sequence is enforced through real store rules, including empty states, appointment-overlap prevention, and location validation. The database schema includes four related tables, foreign keys, indexes, timestamps, row-level security, and generated TypeScript types. Sample data is clearly labeled, missing information has an explicit “Data unavailable” state, and all six screens were validated through Playwright, typecheck, and production build. |
+| Integration, security & production readiness | rough | The frontend is not yet connected to the database, so changes remain in local state and disappear after reloading. Database write policies allow any authenticated user to edit all records, with no representative-level permissions or roles. The route map uses manually positioned SVG elements and fixed travel estimates rather than real geolocation, while analytics rely on static client-side datasets instead of stored activity. The app also uses a globalThis workaround for Vite HMR, has no automated test suite or CI controls, and keeps the kill-switch thresholds as hard-coded UI constants instead of configurable product rules. |
 
 ## Risks & assumptions for the team
 
-_____
+Assumption: reps will adopt a new tool over spreadsheets. Unvalidated — that's what this prototype exists to test. The 20%-contact / 30%-profile-update thresholds are the pre-agreed kill switch; do not soften them.
+Risk: prototype data reads as real. All physicians, billing figures, and analytics are invented. Demo numbers (e.g. the 17% → 25% signal jump) demonstrate the mechanics, not expected real-world outcomes.
+Risk: persistence is a store redesign, not a swap. PrmProvider assumes synchronous in-memory arrays and instant derived metrics. Wiring it to the database means server functions (or the browser client for simple reads), auth so writes are attributed to a real representative, roles in a separate roles table (never on profiles), tighter RLS scoping, and deriving the weekly signal from contacts instead of counters. Keep every screen's contract with the provider unchanged while doing it.
+Risk: auth and roles are not set up. The database accepts writes from any signed-in user; there is no sign-in flow in the app, no user provisioning, and no role model. Enable auth before any real rep touches the data.
+Risk: route logic is heuristic. Visit ordering and outlier flagging use authored geography and simple scoring. Real deployment needs actual geo data and travel-time estimates (the schema already stores coordinates and travel minutes for this).
+Assumption: single representative, single hospital network. Multi-rep / multi-region behavior is only stubbed in Evidence filters.
+Edge-runtime constraint: the production target is Cloudflare Workers via the hosting platform — no Node-only packages in server code, and everything must bundle at build time.
 
 ## How to run it
 
 ```
-[setup + run commands]
+bun install        # or npm install / pnpm install
+bun run dev        # dev server with HMR (localhost:8080 in the sandbox)
+bun run build      # production build
+bun run build:dev  # development-mode build (prerender check)
+bun run lint       # eslint
+The app itself needs no secrets to run the demo: it renders entirely from in-memory data. The generated Supabase clients read VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY (browser) and SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (server) from the environment, which Lovable Cloud provides — you only need them once code actually calls the database.
+Start at / (Today). To see the full flow: select physicians → "Add to Schedule" → Schedule → "Plan Route" → confirm → back to Today. Physician profiles are at /physicians → click a physician; Evidence is at /evidence.
+Database schema lives in supabase/migrations/; don't edit generated files under src/integrations/supabase/.
+Companion documents: Physician_Relations_CRM_Prototype.md (README) and Physician_Relations_CRM_PRD.md (product requirements with mocked-vs-real breakdown).
+First tasks for a new engineer: read the PRD, then demo-data.ts, then PrmProvider.tsx, then click through the flow. When you wire persistence, start by replacing the store's arrays with server functions (auth-gated, RLS-scoped), derive the weekly signal from the contacts table, and keep every screen's contract with the provider unchanged.
 ```
